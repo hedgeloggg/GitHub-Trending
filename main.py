@@ -130,17 +130,6 @@ def main():
 {analysis}
 
 {'='*60}
-
-📌 **小提示**：
-- 点击项目名即可跳转到 GitHub 主页
-- 若分析不准确，可能是项目描述本身较模糊
-- 欢迎关注真正解决你痛点的工具！
-
----
-🤖 本邮件由 GitHub Actions + Qwen-Max 自动生成  
-🕒 发送时间：{time.strftime('%Y-%m-%d %H:%M:%S')} (UTC)
-📧 如需停止接收，请关闭此 workflow
-"""
   
     # 4. 发送
     send_email(subject, body)
