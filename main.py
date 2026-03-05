@@ -53,9 +53,14 @@ def analyze_with_qwen(projects):
     if not DASHSCOPE_API_KEY:
         raise ValueError("DASHSCOPE_API_KEY 未设置！请在 Secrets 中配置。")
 
-    prompt = "你是一位资深开发者，请用中文为以下 GitHub 项目生成简洁说明（每个项目不超过 80 字，突出用途和亮点）：\n\n"
-    for p in projects:
-        prompt += f"- {p['name']}: {p['description']}\n"
+    prompt = (
+    "你是一位资深开发者，请为以下 GitHub 项目生成简洁中文说明（每项不超过 100 字），"
+    "格式严格按：\n"
+    "- 【项目名】用途与亮点...\n\n"
+    "项目列表：\n"
+)
+for p in projects:
+    prompt += f"- {p['name']} ({p['link']}): {p['description']}\n"
 
     try:
         from dashscope import Generation
