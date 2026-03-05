@@ -127,13 +127,11 @@ def main():
     # 将 Qwen 的分析按行分割，便于后续对齐（可选）
     analysis_lines = analysis.strip().split('\n')
     
-    body = f"""您好！
-
-以下是 {time.strftime('%Y年%m月%d日')} GitHub 全站最热门的开源项目，已由 **Qwen-Max 大模型** 自动生成中文解读：
+    body = f"""以下是 {time.strftime('%Y年%m月%d日')} GitHub 全站最热门的开源项目
 
 {'='*60}
 
-{analysis}
+{analysis.strip()}
 
 {'='*60}
 """ 
