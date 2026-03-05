@@ -25,6 +25,6 @@ jobs:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-          TO_EMAIL: your@email.com
+          TO_EMAIL: 241999958@qq.com
         run: |
           python main.py
