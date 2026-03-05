@@ -5,9 +5,14 @@ import dashscope
 dashscope.api_key = os.getenv("DASHSCOPE_API_KEY")
 
 def analyze_projects(projects):
-    prompt = "你是一位资深技术专家，请用中文简洁说明以下 GitHub 项目的用途、核心技术与适用场景（每个项目不超过 80 字）：\n"
-    for p in projects:
-        prompt += f"- {p['name']}: {p['description']}\n"
+    prompt = (
+    "你是一位资深开发者，请为以下 GitHub 项目生成简洁中文说明（每项不超过 100 字），"
+    "格式严格按：\n"
+    "- 【项目名】用途与亮点...\n\n"
+    "项目列表：\n"
+)
+for p in projects:
+    prompt += f"- {p['name']} ({p['link']}): {p['description']}\n"
     
     response = dashscope.Generation.call(
         model="qwen-max",
