@@ -59,8 +59,7 @@ def analyze_with_qwen(projects):
     "- 【项目名】用途与亮点...\n\n"
     "项目列表：\n"
     )
-    
-for p in projects:
+    for p in projects:
     prompt += f"- {p['name']} ({p['link']}): {p['description']}\n"
 
     try:
