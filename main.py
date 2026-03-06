@@ -10,21 +10,18 @@ import time
 import traceback
 
 # ========== 配置 ==========
-# 从环境变量读取（GitHub Secrets）
 DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
-EMAIL_USER = os.getenv("EMAIL_USER")        # 发件人邮箱（如 xxx@gmail.com）
-EMAIL_PASS = os.getenv("EMAIL_PASS")        # 应用专用密码或授权码
-TO_EMAIL = os.getenv("TO_EMAIL")            # 收件人邮箱
-SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")  # 默认 Gmail
-SMTP_PORT = int(os.getenv("SMTP_PORT", "465"))           # 默认 SSL 端口
+EMAIL_USER = os.getenv("EMAIL_USER")
+EMAIL_PASS = os.getenv("EMAIL_PASS")
+TO_EMAIL = os.getenv("TO_EMAIL")
+SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "465"))
 
 # ========== 工具函数 ==========
 def fetch_github_trending():
     print("🔍 正在抓取 GitHub 今日热门项目...")
     url = "https://github.com/trending?since=daily"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (compatible; GitHub Trending Digest Bot)"
-    }
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; GitHub Digest Bot)"}
     try:
         resp = requests.get(url, headers=headers, timeout=15)
         resp.raise_for_status()
@@ -48,45 +45,10 @@ def fetch_github_trending():
     print(f"✅ 成功获取 {len(repos)} 个项目")
     return repos
 
-def analyze_with_qwen(projects):
-    print("🧠 正在调用 Qwen-Max 分析项目...")
-    if not DASHSCOPE_API_KEY:
-        raise ValueError("DASHSCOPE_API_KEY 未设置！请在 Secrets 中配置。")
-
-    prompt = (
-    "你是一位资深开发者，请为以下 GitHub 项目生成简洁中文说明（每项不超过 100 字），"
-    "格式严格按：\n"
-    "- 【项目名】用途与亮点...\n\n"
-    "项目列表：\n"
-    )
-    
-    for p in projects:
-        prompt += f"- {p['name']} ({p['link']}): {p['description']}\n"
-
-    try:
-        from dashscope import Generation
-        response = Generation.call(
-            model="qwen-max",
-            prompt=prompt,
-            api_key=DASHSCOPE_API_KEY,
-            max_tokens=1000
-        )
-        if response.status_code == HTTPStatus.OK:
-            return response.output.text
-        else:
-            raise RuntimeError(f"Qwen API 错误: {response.code} - {response.message}")
-    except Exception as e:
-        print(f"⚠️ Qwen 分析失败，使用原始描述代替: {e}")
-        fallback = "\n".join([
-            f"- {p['name']}: {p['description'] or '无描述'}"
-            for p in projects
-        ])
-        return "（Qwen 分析失败，显示原始信息）\n\n" + fallback
-
 def send_email(subject, body):
     print("📧 正在发送邮件...")
     if not all([EMAIL_USER, EMAIL_PASS, TO_EMAIL]):
-        raise ValueError("邮箱配置缺失！请检查 EMAIL_USER, EMAIL_PASS, TO_EMAIL Secrets。")
+        raise ValueError("邮箱配置缺失！请检查 Secrets。")
 
     msg = MIMEText(body, 'plain', 'utf-8')
     msg['Subject'] = subject
@@ -118,48 +80,69 @@ def main():
         print("⚠️ 未获取到任何项目，跳过分析。")
         return
 
-    # 2. 分析：获取每项目的简介（纯文本）
-    project_summaries = []
+    # 2. 为每个项目生成「用途」和「应用示例」
+    project_details = []
     for p in projects:
         try:
-            # 调用 Qwen 为单个项目生成简介
-            prompt = f"用一句话（不超过 80 字）说明这个 GitHub 项目是做什么的，突出其用途或亮点：{p['name']} - {p['description']}"
+            prompt = (
+                f"你是一位技术布道师，请用中文回答以下关于 GitHub 项目的问题。\n"
+                f"项目名称：{p['name']}\n"
+                f"项目描述：{p['description']}\n\n"
+                f"请严格按以下格式输出（不要任何额外文字）：\n"
+                f"【用途】\n"
+                f"<一句话说明项目是做什么的，不超过 100 字>\n"
+                f"【示例】\n"
+                f"<举一个具体的应用场景，比如“可用于...”或“适合在...场景中使用”，不超过 100 字>"
+            )
             from dashscope import Generation
             response = Generation.call(
                 model="qwen-max",
                 prompt=prompt,
                 api_key=DASHSCOPE_API_KEY,
-                max_tokens=150
+                max_tokens=300
             )
             if response.status_code == HTTPStatus.OK:
-                summary = response.output.text.strip().rstrip('。')  # 去掉结尾句号更干净
+                text = response.output.text.strip()
+                if "【用途】" in text and "【示例】" in text:
+                    parts = text.split("【示例】", 1)
+                    purpose = parts[0].replace("【用途】", "").strip()
+                    example = parts[1].strip() if len(parts) > 1 else "暂无示例"
+                else:
+                    # 回退：整段当作用途
+                    purpose = text
+                    example = "（未能生成应用示例）"
             else:
-                summary = p['description'] or "暂无描述"
+                purpose = p['description'] or "暂无描述"
+                example = "（分析失败）"
         except Exception as e:
-            print(f"⚠️ 单个项目分析失败: {e}")
-            summary = p['description'] or "暂无描述"
-        
-        project_summaries.append({
+            print(f"⚠️ 项目 {p['name']} 分析失败: {e}")
+            purpose = p['description'] or "暂无描述"
+            example = "（异常）"
+
+        project_details.append({
             "name": p['name'],
             "link": p['link'],
-            "summary": summary
+            "purpose": purpose,
+            "example": example
         })
 
-    # 3. 手动构建清晰的邮件正文（关键！）
+    # 3. 构建清晰、宽松的邮件正文
     project_lines = []
-    for i, proj in enumerate(project_summaries, 1):
-        # 每个项目用 3 行：序号+名称、空行、介绍
+    for i, proj in enumerate(project_details, 1):
         project_lines.append(f"{i}. 【{proj['name']}】")
         project_lines.append(f"   {proj['link']}")
-        project_lines.append("")  # 空行 → 增大行距
-        project_lines.append(f"   {proj['summary']}")
-        project_lines.append("\n")  # 项目之间再加一个空行
+        project_lines.append("")
+        project_lines.append(f"   💡 {proj['purpose']}")
+        project_lines.append(f"   🌰 {proj['example']}")
+        project_lines.append("")  # 项目之间空一行
 
-    analysis_text = "\n".join(project_lines).strip()
+    analysis_text = "\n".join(project_lines).rstrip()
 
     # 4. 构建最终邮件
     subject = "🚀 GitHub 每日热门项目速览"
-    body = f"""以下是 {time.strftime('%Y年%m月%d日')} GitHub 最热门的开源项目：
+    body = f"""您好！
+
+以下是 {time.strftime('%Y年%m月%d日')} GitHub 最热门的开源项目（由 Qwen-Max 自动分析）：
 
 {'='*60}
 
@@ -167,7 +150,6 @@ def main():
 
 {'='*60}
 """
-    # 4. 发送
     send_email(subject, body)
     print("🎉 全部任务完成！")
 
